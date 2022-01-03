@@ -8,6 +8,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pytz
 from predictor import Predictor
+from sklearn.cluster import KMeans
+import pendulum
+import pytz
 
 
 
@@ -29,7 +32,9 @@ class Bot:
 
         self.stocks_to_watch= stocks_to_watch
         self.initial_start = datetime.now()
-        self.average_trade_volume=[]
+        self.curr_avg_trade_volumes=[]
+        self.curr_avg_volume = None
+        self.daily_avg_volume = None
         self.trade_volume=0
         self.total_trades_per_minute=0
         self.data_per_minute= np.array([])
@@ -41,27 +46,36 @@ class Bot:
         self.start_time = None
         self.reset_val_cond=False
         self.predictor=None
-        self.timestamps=np.array([])
+        self.timestamps=None
         self.df=None
+        self.initial_data_collection=False
 
 
     def get_historical_price_data(self, company):
+        now = pd.Timestamp.now(tz='US/Pacific').floor('1min')
+        today = now.strftime('%Y-%m-%d')
+        tomorrow = (now + pd.Timedelta('1day')).strftime('%Y-%m-%d')
+        bar = api.get_barset([company], 'minute', start=today, end=tomorrow).df
+        return bar
 
-        api.get_bars(company, TimeFrame.Hour, "2021-11-08", "2021-11-08", adjustment='raw').df
 
+    def signal_breakout(self,resistance,support,price):
+        if price<support:
+            return 's'
+        if price>resistance:
+            return 'r'
 
+    def signal_buy_sell(self,price,resistance,support,curr_avg_volume,daily_avg_volume):
 
-    def get_resup(self,price,avg_volume):
+        if self.signal_breakout(resistance,support,price)=='r':
+            if curr_avg_volume>=daily_avg_volume*0.6:
+                return 'buy'
+        if self.signal_breakout(resistance,support,price)=='s':
+            if curr_avg_volume>=daily_avg_volume*0.3:
+                return 'sell'
+        else:
+            return None
 
-        pass
-
-    def signal_buy(self,price,avg_volume):
-
-        pass
-
-    def signal_sell(self,price_data,resup):
-
-        pass
 
 
     def get_bars(self,t):
@@ -76,33 +90,53 @@ class Bot:
             self.high=t.price
 
 
-        if  datetime.now().minute>=(self.start_time.minute+1):
-            self.close=t.price
-            self.data_per_minute= np.append(self.data_per_minute,np.array([self.open,self.close,self.high,self.low,round(self.trade_volume/self.total_trades_per_minute,2)]))
-            self.reset_values()
-            self.reset_val_cond=True
-        if datetime.now().minute>=(self.initial_start.minute+20):
+        if self.initial_data_collection == True:
+            if self.predictor == None:
+                self.predictor= Predictor(self.df)
+                lows = pd.DataFrame(data=self.predictor.df, index=self.predictor.df.index, columns=["Low"])
+                highs = pd.DataFrame(data=self.predictor.df, index=self.predictor.df.index, columns=["High"])
 
-            self.df = pd.DataFrame(self.data_per_minute.reshape(20,5), columns=['Open','Close','High','Low','avg_volume'])
-            new_predictor= Predictor(self.df)
-            for i in range(2,new_predictor.df.shape[0]-2):
-                if new_predictor.get_Support(i)==True:
-                    np.append(new_predictor.supports,new_predictor.df['Low'][i])
-                elif new_predictor.get_Resistance(i)==True:
-                    np.append(new_predictor.resistances,new_predictor.df['High'][i])
-            print("Resistance: ")
-            print(new_predictor.resistances)
-            print("Supports: ")
-            print(new_predictor.supports)
-            np.savetxt('bars.csv',self.df)
-            sys.exit()
+                self.predictor.predict_resistance(highs)
+                self.predictor.predict_support(lows)
+
+
+                print("Resistance: ")
+                print(self.predictor.resistances)
+                print("Supports: ")
+                print(self.predictor.supports)
+            signal = self.signal_buy_sell(t.price,max(self.predictor.resistances),min(self.predictor.supports),self.curr_avg_volume,self.daily_avg_volume)
+            if signal is not None:
+                print(signal)
+
+        if  datetime.now().minute>=(self.start_time.minute+1):
+            print("got to here")
+            self.timestamps=t.timestamp
+            self.close=t.price
+            self.data_per_minute= np.append(self.data_per_minute,np.array([self.timestamps,self.open,self.close,self.high,self.low]))
+            self.curr_avg_volume = self.trade_volume/self.total_trades_per_minute
+            self.curr_avg_trade_volumes.append(self.curr_avg_volume)
+
+            self.reset_values()
+
+            self.reset_val_cond=True
+        if datetime.now().minute>=(self.initial_start.minute+15):
+            self.initial_data_collection=True
+            self.daily_avg_volume=(sum(self.curr_avg_trade_volumes)/15)
+            print("got to here too")
+            self.df = pd.DataFrame(self.data_per_minute.reshape(15,5), columns=['Timestamp','Open','Close','High','Low'])
+
+            self.initial_start = datetime.now()
+            self.reset_values()
+
         if self.reset_val_cond==False:
             if t.price>self.high:
                 self.high = t.price
             if t.price<self.low:
                 self.low=t.price
             self.total_trades_per_minute+=1
-            self.trade_volume+=t.size
+            if t.size!=0:
+
+                self.trade_volume+=t.size
 
     def reset_values(self):
         self.start_time=None
@@ -119,7 +153,7 @@ class Bot:
 
         # self.trade_volume.append(t.size)
         # print(self.trade_volume)
-        print('trade', t)
+        # print(t)
         self.get_bars(t)
 
         # print(t.size)
@@ -135,8 +169,10 @@ def get_time(unix_epoch_time):
     my_datetime = str(pd.to_datetime(unix_epoch_time, unit='ns', utc=True))
 
     time= datetime((int(my_datetime[0:4])),(int(my_datetime[5:7])),(int(my_datetime[8:10])),(int(my_datetime[11:13])),(int(my_datetime[14:16])),(int(my_datetime[17:19])))
-    return time.time()
+
+    return time.time
 
 
 test_bot = Bot('AAPL')
+# print(test_bot.get_historical_price_data('AAPL'))
 test_bot.get_live_price_data('AAPL')
