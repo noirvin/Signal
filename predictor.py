@@ -11,14 +11,6 @@ class Predictor:
         self.resistances=np.array([])
         self.supports=np.array([])
         self.model=None
-    def pre_process(x,y):
-
-        pass
-
-    def train(x_train,y_train):
-
-        pass
-
 
 
     def predict_support(self,lows):

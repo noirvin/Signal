@@ -1,6 +1,19 @@
+from alpaca_trade_api.rest import REST, TimeFrame, TimeFrameUnit
+from alpaca_trade_api.stream import Stream
+from datetime import datetime
+import json
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import pytz
+
+from company import Company
+api = REST(key_id='AK6XD1EIN49YAJYBTSO8',secret_key='Wvdxl7a7oDlN0MBE7zkDzbg3SqHachg1cyyQn39i', api_version='v2')
+stream = Stream(key_id='AK6XD1EIN49YAJYBTSO8',
+                secret_key='Wvdxl7a7oDlN0MBE7zkDzbg3SqHachg1cyyQn39i',
+                data_feed='sip')
+
 
 
 
@@ -8,7 +21,7 @@ fig = plt.figure()
 ax = plt.axes()
 
 
-df=pd.read_csv('bars.csv')
+df=api.get_bars('AAPL', TimeFrame.Minute, "2020-12-06", "2021-01-05", adjustment='raw').df
 print(df)
 
 df=pd.DataFrame(data=df,columns=['Open','Close','High','Low','avg_volume'])
