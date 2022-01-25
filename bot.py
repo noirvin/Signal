@@ -14,7 +14,7 @@ import pytz
 from company import Company
 from tda import auth, client
 import tda_config
-
+from tda.orders.common import Duration, Session
 
 
 
@@ -35,14 +35,11 @@ except FileNotFoundError:
     with webdriver.Chrome(executable_path='/Users/arvinseifipour/dev/signal/chromedriver') as driver:
         c = auth.client_from_login_flow(
             driver, tda_config.api_key, tda_config.redirect_uri, tda_config.token_path)
-
-r = c.get_price_history('AAPL',
-        period_type=client.Client.PriceHistory.PeriodType.YEAR,
-        period=client.Client.PriceHistory.Period.TWENTY_YEARS,
-        frequency_type=client.Client.PriceHistory.FrequencyType.DAILY,
-        frequency=client.Client.PriceHistory.Frequency.DAILY)
-assert r.status_code == 200, r.raise_for_status()
-print(json.dumps(r.json(), indent=4))
+target_date= datetime.strptime('2022-01-19','%Y-%m-%d').date()
+print(target_date)
+# r = c.get_option_chain('AAPL',contract_type=c.Options.ContractType.CALL, strike=300, startDate= target_date,endDate= target_date)
+#
+# print(json.dumps(r.json(), indent=4))
 
 
 
@@ -151,8 +148,8 @@ class Bot:
 
 
             #buy calls
-            if self.companies[curr_company].signal == 'buy':
-                if self.companies[curr_company].in_position_calls==False:
+            # if self.companies[curr_company].signal == 'buy':
+            #     if self.companies[curr_company].in_position_calls==False:
                     # quantity= self.get_quantity('TSLA',t.price)
                     # self.companies[curr_company].share_numbers=quantity
                     # api.submit_order(
@@ -163,11 +160,11 @@ class Bot:
                     #     time_in_force='day'
                     # )
                     #to-do: place buy order for call
-                    self.companies[curr_company].in_position_calls = True
-                    self.companies[curr_company].calls_bought_at = t.price
+                    # self.companies[curr_company].in_position_calls = True
+                    # self.companies[curr_company].calls_bought_at = t.price
 
             #sell profits when value keeps going up
-            if self.companies[curr_company].signal == 'buy' and self.companies[curr_company].in_position_calls = True and self.profit_loss>=(self.companies[curr_company].initial_investment*2.1):
+            # if self.companies[curr_company].signal == 'buy' and self.companies[curr_company].in_position_calls == True and self.profit_loss>=(self.companies[curr_company].initial_investment*2.1):
                 # api.submit_order(
                 #     symbol= curr_company,
                 #     side='sell',
@@ -176,13 +173,13 @@ class Bot:
                 #     time_in_force='day'
                 # )
                 #to-do: place sell order for calls
-                self.companies[curr_company].in_position_calls = False
+                # self.companies[curr_company].in_position_calls = False
 
 
             #sell loss or profit when market stagnant
-            if  self.companies[curr_company].signal == None:
-                if self.companies[curr_company].in_position_calls == True:
-                    if self.profit_loss>=(self.companies[curr_company].initial_investment*1.1)  or self.profit_loss<=(self.companies[curr_company].initial_investment*0.8) :
+            # if  self.companies[curr_company].signal == None:
+            #     if self.companies[curr_company].in_position_calls == True:
+            #         if self.profit_loss>=(self.companies[curr_company].initial_investment*1.1)  or self.profit_loss<=(self.companies[curr_company].initial_investment*0.8) :
 
                         # api.submit_order(
                         #     symbol= curr_company,
@@ -192,10 +189,10 @@ class Bot:
                         #     time_in_force='day'
                         # )
                         #to-do: place sell order for calls
-                        self.companies[curr_company].in_position_calls = False
+                        # self.companies[curr_company].in_position_calls = False
             #sell calls when maket drops below support
-            if self.companies[curr_company].signal == 'sell':
-                if self.companies[curr_company].in_position_calls == True:
+            # if self.companies[curr_company].signal == 'sell':
+            #     if self.companies[curr_company].in_position_calls == True:
                     # api.submit_order(
                     #     symbol= curr_company,
                     #     side='sell',
@@ -204,35 +201,35 @@ class Bot:
                     #     time_in_force='day'
                     # )
                     #to-do:place sell order for calls
-                    self.companies[curr_company].in_position_calls = False
+                    # self.companies[curr_company].in_position_calls = False
             #buy puts when market about to drop
-            if self.companies[curr_company].signal == 'sell':
-                if self.companies[curr_company].in_position_puts == False:
+            # if self.companies[curr_company].signal == 'sell':
+            #     if self.companies[curr_company].in_position_puts == False:
                     #todo: place order to buy puts
 
-                    self.companies[curr_company].in_position_puts = True
-                    self.companies[curr_company].puts_bought_at = t.price
+                    # self.companies[curr_company].in_position_puts = True
+                    # self.companies[curr_company].puts_bought_at = t.price
 
             #sell puts when market stagnant
-            if self.companies[curr_company].signal == None:
-                if self.companies[curr_company].in_position_puts == True:
-                    if self.profit_loss>=(self.companies[curr_company].initial_investment*1.1)  or self.profit_loss<=(self.companies[curr_company].initial_investment*0.8) :
-                        #todo:place order to sell puts
-                        self.companies[curr_company].in_position_puts == False
+            # if self.companies[curr_company].signal == None:
+            #     if self.companies[curr_company].in_position_puts == True:
+            #         if self.profit_loss>=(self.companies[curr_company].initial_investment*1.1)  or self.profit_loss<=(self.companies[curr_company].initial_investment*0.8) :
+            #             #todo:place order to sell puts
+            #             self.companies[curr_company].in_position_puts == False
+            #
+            #
+            # #sell puts profit when market keeps going down
+            # if self.companies[curr_company].signal == 'sell' and self.companies[curr_company].in_position_puts == True and self.profit_loss>=(self.companies[curr_company].initial_investment*2.1):
+            #     #todo:place order to sell puts
+            #     self.companies[curr_company].in_position_puts == False
+            #
+            # #sell puts when market takes off above resistance
+            # if self.companies[curr_company].signal == 'buy':
+            #     if self.companies[curr_company].in_position_puts == True:
+            #         #to-do:place sell order for calls
+            #         self.companies[curr_company].in_position_puts = False
 
 
-            #sell puts profit when market keeps going down
-            if self.companies[curr_company].signal == 'sell' and self.companies[curr_company].in_position_puts = True and self.profit_loss>=(self.companies[curr_company].initial_investment*2.1):
-                #todo:place order to sell puts
-                self.companies[curr_company].in_position_puts == False
-
-            #sell puts when market takes off above resistance
-            if self.companies[curr_company].signal == 'buy':
-                if self.companies[curr_company].in_position_puts == True:
-                    #to-do:place sell order for calls
-                    self.companies[curr_company].in_position_puts = False
-
-                    
         if datetime.now().minute>=(self.start_time.minute+1):
             for company in self.companies.keys():
                 self.companies[company].timestamps=t.timestamp
@@ -248,7 +245,10 @@ class Bot:
         if datetime.now().minute>=(self.initial_start.minute+5):
             for company in self.companies.keys():
                 self.companies[company].daily_avg_volume=(sum(self.companies[company].curr_avg_trade_volumes)/len(self.companies[company].curr_avg_trade_volumes))
-                self.companies[company].minute_df = pd.DataFrame(self.companies[company].data_per_minute.reshape(5,5), columns=['Timestamp','Open','Close','High','Low'])
+                try:
+                    self.companies[company].minute_df = pd.DataFrame(self.companies[company].data_per_minute.reshape(5,5), columns=['Timestamp','Open','Close','High','Low'])
+                except ValueError:
+                    self.companies[company].minute_df = pd.DataFrame(self.companies[company].data_per_minute.reshape(4,5), columns=['Timestamp','Open','Close','High','Low'])    
                 updated_frame_data = [self.companies[company].daily_df,self.companies[company].minute_df]
                 self.companies[company].daily_df=pd.concat(updated_frame_data)
                 self.companies[company].daily_df=self.companies[company].daily_df.reset_index(drop=True)
@@ -316,7 +316,12 @@ def get_time(unix_epoch_time):
 
     return time.time
 
+def run_forever():
+    try:
+        test_bot = Bot(['AAPL','AMD','TSLA','QQQ','NVDA','PYPL','F','SNAP'])
+        test_bot.setup()
+        test_bot.get_live_price_data()
+    except ValueError:
+        run_forever()
 
-# test_bot = Bot(['AAPL','AMD','TSLA','QQQ','NVDA','PYPL','F','SNAP'])
-# test_bot.setup()
-# test_bot.get_live_price_data()
+run_forever()
