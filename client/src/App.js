@@ -1,29 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import CompaniesList from './CompaniesList';
+import Company from './Company';
 import { v4 as uuidv4 } from 'uuid';
+import io from 'socket.io-client';
+import axios from 'axios'
 
-const LOCAL_STORAGE_KEY = 'companyApp.companies'
+const socket = io.connect('http://localhost:5000')
 
 function App() {
   const [companies,setCompanies] = useState([])
   const companySymbolRef = useRef()
 
-  useEffect(()=>{
-    const storedCompanies = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY))
-    if (storedCompanies) setCompanies(storedCompanies)
-  },[])
+  socket.on('companiesAddedResponse', (res) => {
+    console.log(res)
+    companies.push({id: uuidv4(), symbol: res.data.data[1], signal: res.data.data[0]})
 
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY,JSON.stringify(companies))
-  },[companies])
+   		
+    
+    console.log(companies)
+    setCompanies([...companies])
+  })
 
-  function handleAddCompany(e){
-
-    const symbol = companySymbolRef.current.value
-    if (symbol === '')return
-    setCompanies(prevCompanies =>{
-      return [...prevCompanies,{id:uuidv4(), symbol: symbol, signal:'stagnant'}]
-    })
+  function handleAddCompanies(e){
+    const symbols = companySymbolRef.current.value.split(' ')
+    if (symbols === '')return
+    socket.emit('CompaniesAdded', {'data' : symbols})
     companySymbolRef.current.value = null
   }
 
@@ -31,7 +32,7 @@ function App() {
     <>
     <CompaniesList companies={companies}/>
     <input ref={companySymbolRef}type="text" />
-    <button onClick={handleAddCompany}>Add Company</button>
+    <button onClick={handleAddCompanies}>Add Company</button>
     <button>Clear all Companies</button>
     </>
     

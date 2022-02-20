@@ -15,6 +15,11 @@ from company import Company
 from tda import auth, client
 import tda_config
 from tda.orders.common import Duration, Session
+from app import socketio
+from flask import Flask, render_template, request
+from flask_socketio import *
+
+
 
 
 
@@ -41,7 +46,8 @@ print(target_date)
 #
 # print(json.dumps(r.json(), indent=4))
 
-
+app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 class Bot:
 
@@ -57,6 +63,7 @@ class Bot:
         self.reset_val_cond=False
         self.df=None
         self.data_collected = False
+        self.signals= {}
 
 
 
@@ -76,11 +83,10 @@ class Bot:
         # today = now.strftime('%Y-%m-%d')
         # tomorrow = (now + pd.Timedelta('1day')).strftime('%Y-%m-%d')
         # bar = api.get_barset([company], 'minute', start=today, end=tomorrow).df
-
         for company in self.companies.keys():
 
-            self.companies[company].thirty_day_df =api.get_bars(company, TimeFrame.Minute, "2021-12-11", "2022-01-11", adjustment='raw').df
-
+            self.companies[company].thirty_day_df =api.get_bars(company, TimeFrame.Minute, "2022-01-18", "2022-02-17", adjustment='raw').df
+            print(self.companies[company].thirty_day_df)
     def test_on_historical_data(self):
 
         self.get_historical_price_data()
@@ -112,7 +118,7 @@ class Bot:
             if curr_volume>=thirty_day_avg_volume*0.6:
                 return 'buy'
         if self.signal_breakout(resistance,support,price)=='s':
-            if curr_volume>=thirty_day_avg_volume*0.3:
+            if curr_volume>=thirty_day_avg_volume*0.6:
                 return 'sell'
         else:
             return None
@@ -142,9 +148,10 @@ class Bot:
         #check if initial data is collected and make signals
         if self.companies[curr_company].daily_df.empty!=True:
             self.companies[curr_company].signal = self.signal_buy_sell(t.price,max(self.companies[curr_company].predictor.resistances),min(self.companies[curr_company].predictor.supports),t.size,self.companies[curr_company].thirty_day_avg_vol)
+            self.signals[curr_company] = self.companies[curr_company].signal
+            
 
-            if self.companies[curr_company].signal is not None:
-                print(self.companies[curr_company].signal,curr_company)
+    
 
 
             #buy calls
@@ -286,7 +293,11 @@ class Bot:
             if t.size!=0:
                 self.companies[curr_company].trade_volume+=t.size
             self.companies[curr_company].prices.append(t.price)
-
+        if self.companies[t.symbol].signal is not None:
+            print('got to here')
+            signal_info = [self.companies[t.symbol].signal, t.symbol]  
+            print(signal_info)  
+            # socketio.emit('companiesAddedResponse', {'data': signal_info})
     def reset_values(self):
         for company in self.companies.keys():
             self.companies[company].high=0
@@ -307,7 +318,6 @@ class Bot:
 
 
 
-
 pst= pytz.timezone('US/Pacific')
 def get_time(unix_epoch_time):
     my_datetime = str(pd.to_datetime(unix_epoch_time, unit='ns', utc=True))
@@ -316,12 +326,49 @@ def get_time(unix_epoch_time):
 
     return time.time
 
-def run_forever():
-    try:
-        test_bot = Bot(['AAPL','AMD','TSLA','QQQ','NVDA','PYPL','F','SNAP'])
-        test_bot.setup()
-        test_bot.get_live_price_data()
-    except ValueError:
-        run_forever()
+# def run_forever():
+#     try:
+#         test_bot = Bot(['AAPL','AMD','TSLA','QQQ','NVDA','PYPL','F','SNAP'])
+#         test_bot.setup()
+#         test_bot.get_live_price_data()
+#     except ValueError:
+#         run_forever()
 
-run_forever()
+# # run_forever()
+
+
+
+@app.route('/signals', methods=['GET','POST'])
+def signals():
+    """Return signals."""
+    if request.method == 'POST':
+        json_data = request.get_json()
+        print(json_data)
+        test_bot = Bot(json_data)
+        test_bot.setup()
+        test_bot.get_live_price_data()   
+        return 'companies succesfully added'
+           
+
+# SocketIO Events
+@socketio.on('connect')
+def connected():
+    print('Connected')
+
+@socketio.on('disconnect')
+def disconnected():
+    print('Disconnected')
+
+@socketio.on('CompaniesAdded')
+def companies_added(message):
+    print(message)
+    requested_companies= [company for company in message['data']]
+    test_bot = Bot(requested_companies)
+    test_bot.setup()
+    test_bot.get_live_price_data()  
+
+# if __name__ == '__main__':
+#     socketio.run(app, debug=True)
+test_bot = Bot(['AMD','AAPL', 'QQQ', 'TSLA','GOOG','NVDA'])
+test_bot.setup()
+test_bot.get_live_price_data()
