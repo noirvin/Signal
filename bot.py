@@ -18,7 +18,7 @@ from tda.orders.common import Duration, Session
 from app import socketio
 from flask import Flask, render_template, request
 from flask_socketio import *
-
+from termcolor import colored, cprint
 
 
 
@@ -85,8 +85,7 @@ class Bot:
         # bar = api.get_barset([company], 'minute', start=today, end=tomorrow).df
         for company in self.companies.keys():
 
-            self.companies[company].thirty_day_df =api.get_bars(company, TimeFrame.Minute, "2022-01-18", "2022-02-17", adjustment='raw').df
-            print(self.companies[company].thirty_day_df)
+            self.companies[company].thirty_day_df =api.get_bars(company, TimeFrame.Minute, "2022-03-06", "2022-04-06", adjustment='raw').df
     def test_on_historical_data(self):
 
         self.get_historical_price_data()
@@ -115,11 +114,11 @@ class Bot:
     def signal_buy_sell(self,price,resistance,support,curr_volume,thirty_day_avg_volume):
 
         if self.signal_breakout(resistance,support,price)=='r':
-            if curr_volume>=thirty_day_avg_volume*0.6:
-                return 'buy'
+            if curr_volume>=thirty_day_avg_volume*0.65:
+                return 'call'
         if self.signal_breakout(resistance,support,price)=='s':
-            if curr_volume>=thirty_day_avg_volume*0.6:
-                return 'sell'
+            if curr_volume>=thirty_day_avg_volume*0.65:
+                return 'put'
         else:
             return None
 
@@ -149,9 +148,9 @@ class Bot:
         if self.companies[curr_company].daily_df.empty!=True:
             self.companies[curr_company].signal = self.signal_buy_sell(t.price,max(self.companies[curr_company].predictor.resistances),min(self.companies[curr_company].predictor.supports),t.size,self.companies[curr_company].thirty_day_avg_vol)
             self.signals[curr_company] = self.companies[curr_company].signal
-            
 
-    
+
+
 
 
             #buy calls
@@ -244,7 +243,7 @@ class Bot:
                 self.companies[company].data_per_minute= np.append(self.companies[company].data_per_minute,np.array([self.companies[company].timestamps,self.companies[company].open,self.companies[company].close,self.companies[company].high,self.companies[company].low]))
                 self.companies[company].curr_avg_volume = self.companies[company].trade_volume/self.companies[company].total_trades_per_minute
                 self.companies[company].curr_avg_trade_volumes.append(self.companies[company].curr_avg_volume)
-            print("got to here")
+            print("collecting data")
 
             self.reset_values()
 
@@ -255,11 +254,10 @@ class Bot:
                 try:
                     self.companies[company].minute_df = pd.DataFrame(self.companies[company].data_per_minute.reshape(5,5), columns=['Timestamp','Open','Close','High','Low'])
                 except ValueError:
-                    self.companies[company].minute_df = pd.DataFrame(self.companies[company].data_per_minute.reshape(4,5), columns=['Timestamp','Open','Close','High','Low'])    
+                    self.companies[company].minute_df = pd.DataFrame(self.companies[company].data_per_minute.reshape(4,5), columns=['Timestamp','Open','Close','High','Low'])
                 updated_frame_data = [self.companies[company].daily_df,self.companies[company].minute_df]
                 self.companies[company].daily_df=pd.concat(updated_frame_data)
                 self.companies[company].daily_df=self.companies[company].daily_df.reset_index(drop=True)
-            print(self.companies['AAPL'].daily_df)
             for company in self.companies.keys():
 
                 self.companies[company].predictor= Predictor(self.companies[company].daily_df)
@@ -270,11 +268,7 @@ class Bot:
                 self.companies[company].predictor.predict_support(lows)
 
 
-                print("Resistance: ")
-                print(self.companies[company].predictor.resistances)
-                print("Supports: ")
-                print(self.companies[company].predictor.supports)
-            print("got to here too")
+            print("data collected, resistance and support updated")
 
 
             self.reset_values()
@@ -294,9 +288,14 @@ class Bot:
                 self.companies[curr_company].trade_volume+=t.size
             self.companies[curr_company].prices.append(t.price)
         if self.companies[t.symbol].signal is not None:
-            print('got to here')
-            signal_info = [self.companies[t.symbol].signal, t.symbol]  
-            print(signal_info)  
+            if t.symbol == 'QQQ':
+                signal_info = [self.companies[t.symbol].signal, colored(t.symbol,'blue')]
+            else:
+                signal_info = [self.companies[t.symbol].signal, colored(t.symbol,'yellow')]
+            if signal_info[0] == 'put':
+                print(colored(signal_info[0],'red'),signal_info[1])
+            else:
+                print(colored(signal_info[0],'green'),signal_info[1])
             # socketio.emit('companiesAddedResponse', {'data': signal_info})
     def reset_values(self):
         for company in self.companies.keys():
@@ -346,9 +345,9 @@ def signals():
         print(json_data)
         test_bot = Bot(json_data)
         test_bot.setup()
-        test_bot.get_live_price_data()   
+        test_bot.get_live_price_data()
         return 'companies succesfully added'
-           
+
 
 # SocketIO Events
 @socketio.on('connect')
@@ -365,10 +364,10 @@ def companies_added(message):
     requested_companies= [company for company in message['data']]
     test_bot = Bot(requested_companies)
     test_bot.setup()
-    test_bot.get_live_price_data()  
+    test_bot.get_live_price_data()
 
 # if __name__ == '__main__':
 #     socketio.run(app, debug=True)
-test_bot = Bot(['AMD','AAPL', 'QQQ', 'TSLA','GOOG','NVDA'])
+test_bot = Bot(['QQQ','SPY'])
 test_bot.setup()
 test_bot.get_live_price_data()
